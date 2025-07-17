@@ -48,10 +48,13 @@ docs/                   # MkDocs
 
 ## 2 · Chunking & Document model
 
-- [ ] `core.chunking.text_splitter` → sentence / token splitter with
+- [x] `core.chunking.text_splitter` → sentence / token splitter with
       configurable `chunk_size`/`overlap`.
-- [ ] `core.models.Document` dataclass `{id, text, metadata}` (no pydantic yet).
-- [ ] Unit tests for splitter edge-cases (unicode, code snippets, huge docs).
+- [x] `core.models.Document` dataclass `{id, text, metadata}` (no pydantic yet).
+- [x] Unit tests for splitter edge-cases (unicode, code snippets, huge docs).
+- [x] **Extended**: Added additional chunking strategies (SEMANTIC, PARAGRAPH, FIXED) from legacy.
+- [x] **Extended**: Added facade TextChunker with multi-strategy support.
+- [x] **Extended**: Implemented text preprocessing, validation, and statistics tracking.
 
 ---
 
