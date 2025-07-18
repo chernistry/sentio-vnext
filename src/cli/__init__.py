@@ -1,15 +1,17 @@
-"""
-Command-line interface modules for Sentio vNext.
+from __future__ import annotations
+
+"""Sentio CLI entrypoint.
+
+Simplified to expose sub-commands directly (no nested *ingest ingest*).
 """
 
 import typer
 
-from src.cli.ingest import ingest_app
+from src.cli.ingest import ingest_command  # noqa: WPS433 – runtime import OK
 
-# Create root CLI app
 app = typer.Typer(help="Sentio vNext CLI", add_completion=False)
 
-# Add subcommands
-app.add_typer(ingest_app, name="ingest")
+# Register commands ----------------------------------------------------
+app.command(name="ingest")(ingest_command)
 
-__all__ = ["app", "ingest_app"]
+__all__ = ["app"]

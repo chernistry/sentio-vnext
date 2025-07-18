@@ -5,6 +5,8 @@ This module checks for the presence of required dependencies and
 provides helpful error messages when they're missing.
 """
 
+from __future__ import annotations
+
 import importlib.util
 import logging
 import sys
@@ -19,80 +21,47 @@ DEPENDENCIES: Dict[str, List[str]] = {
     "ingest": ["pandas", "typer"],
     "api": ["fastapi", "uvicorn", "pydantic"],
     "vector_store": ["qdrant-client"],
+    "retrieval": ["rank_bm25", "qdrant-client"],
     "rerank": ["sentence-transformers"],
 }
 
 
 def is_package_installed(package_name: str) -> bool:
-    """
-    Check if a package is installed.
-    
-    Args:
-        package_name: Name of the package to check.
-        
-    Returns:
-        True if installed, False otherwise.
-    """
+    """Return *True* when package importable."""
+
     return importlib.util.find_spec(package_name) is not None
 
 
 def check_dependencies(components: Optional[List[str]] = None) -> Dict[str, Set[str]]:
-    """
-    Check if all required dependencies are installed.
-    
-    Args:
-        components: List of component names to check. If None, checks all.
-        
-    Returns:
-        Dictionary of {component_name: missing_deps}
-    """
+    """Return mapping of *components* to missing dependencies."""
+
     components = components or list(DEPENDENCIES.keys())
-    
     missing_deps: Dict[str, Set[str]] = {}
-    
     for component in components:
         if component not in DEPENDENCIES:
-            logger.warning(f"Unknown component: {component}")
+            logger.warning("Unknown component: %s", component)
             continue
-            
-        missing = {
-            dep for dep in DEPENDENCIES[component]
-            if not is_package_installed(dep)
-        }
-        
+        missing = {dep for dep in DEPENDENCIES[component] if not is_package_installed(dep)}
         if missing:
             missing_deps[component] = missing
-    
     return missing_deps
 
 
 def print_dependency_report(missing_deps: Dict[str, Set[str]]) -> bool:
-    """
-    Print a report of missing dependencies.
-    
-    Args:
-        missing_deps: Dictionary of {component_name: missing_deps}.
-        
-    Returns:
-        True if all dependencies are installed, False otherwise.
-    """
+    """Print human-readable dependency report. Return *True* if all good."""
+
     if not missing_deps:
         print("✅ All dependencies installed!")
         return True
-        
+
     print("❌ Missing dependencies:")
     for component, deps in missing_deps.items():
         print(f"  - {component}: {', '.join(deps)}")
-    
-    # Print installation instructions
-    all_missing = set()
-    for deps in missing_deps.values():
-        all_missing.update(deps)
-    
-    if all_missing:
-        print("\nInstall missing dependencies with:")
-        print(f"pip install {' '.join(all_missing)}")
-    
+
+    # Consolidated install hint
+    all_missing: Set[str] = set().union(*missing_deps.values())
+    print("\nInstall missing dependencies with:")
+    print(f"pip install {' '.join(sorted(all_missing))}")
     return False
 
 

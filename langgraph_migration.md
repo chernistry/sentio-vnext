@@ -77,24 +77,24 @@ docs/                   # MkDocs
 
 ## 5 · Vector DB layer (Managed)
 
-- [ ] Qdrant **Cloud** client wrapper `core.vector_store.QdrantStore` (reads `QDRANT_URL`).
-- [ ] Collection bootstrap migration (create via REST if absent).
-- [ ] Health-check ping to `/v1/collections`.
+- [x] Qdrant **Cloud** client wrapper `core.vector_store.QdrantStore` (reads `QDRANT_URL`).
+- [x] Collection bootstrap migration (create via REST if absent).
+- [x] Health-check ping to `/v1/collections`.
 
 ---
 
 ## 6 · Retrieval
 
-- [ ] Dense search via Qdrant.
-- [ ] Hybrid search (`SparseBM25 + Dense`) with RRF fusion.
-- [ ] Pluggable scorers.
+- [x] Dense search via Qdrant.
+- [x] Hybrid search (`SparseBM25 + Dense`) with RRF fusion.
+- [x] Pluggable scorers.
 
 ---
 
 ## 7 · Reranker
 
-- [ ] Interface `Reranker.rerank(query, docs, top_k)`.
-- [ ] Default: mini-cross-encoder (sentence-transformers) loaded lazily.
+- [x] Interface `Reranker.rerank(query, docs, top_k)`.
+- [x] Default: mini-cross-encoder (sentence-transformers) loaded lazily.
 
 ---
 

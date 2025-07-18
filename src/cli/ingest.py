@@ -183,7 +183,7 @@ def save_chunks_disk(chunks: List[Document], output_path: Path) -> int:
 
 @ingest_app.command("ingest")
 def ingest_command(
-    path: Annotated[Path, typer.Argument(help="Path to file or directory to ingest")],
+    path: Annotated[Optional[Path], typer.Argument(help="Path to file or directory to ingest", show_default=False)] = None,
     output_dir: Annotated[Optional[Path], typer.Option("--output", "-o", help="Output directory for chunks")] = None,
     recursive: Annotated[bool, typer.Option("--recursive", "-r", help="Process directories recursively")] = True,
     chunk_size: Annotated[int, typer.Option("--chunk-size", help="Size of text chunks")] = None,
@@ -196,6 +196,14 @@ def ingest_command(
     This command reads files from the specified path, splits them into chunks using the
     configured TextChunker, and saves the chunks to disk for later processing.
     """
+    # Resolve path from env var when not supplied
+    if path is None:
+        env_path = os.getenv("SAMPLE_DOCS_FOLDER")
+        if env_path is None:
+            typer.echo("Error: PATH argument missing and SAMPLE_DOCS_FOLDER env var not set", err=True)
+            raise typer.Exit(code=1)
+        path = Path(env_path)
+
     if not path.exists():
         typer.echo(f"Error: Path '{path}' does not exist", err=True)
         raise typer.Exit(code=1)
