@@ -267,7 +267,8 @@ class DocumentIngestor:
         
         # Generate embeddings
         try:
-            embeddings = await self.embedder.aget_text_embedding_batch(texts)
+            # Use embed_async_many method which should be available on all BaseEmbedder implementations
+            embeddings = await self.embedder.embed_async_many(texts)
             
             # Create mapping from document ID to embedding
             doc_embeddings = {
