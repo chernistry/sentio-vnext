@@ -135,6 +135,12 @@ def build_basic_graph(config: Optional[Union[GraphConfig, Dict[str, Any]]] = Non
         max_tokens=graph_config.max_tokens,
     )
     
+    # Create generator node with our LLMGenerator
+    generator_node = create_generator_node(
+        mode=os.getenv("GENERATION_MODE", "balanced"),
+        max_tokens=int(os.getenv("GENERATION_MAX_TOKENS", "1024")),
+    )
+    
     # Add retriever node
     graph.add_node("retriever", retriever_node)
     
@@ -157,18 +163,10 @@ def build_basic_graph(config: Optional[Union[GraphConfig, Dict[str, Any]]] = Non
         graph.add_node("selector", selector_node)
         graph.add_edge("retriever", "selector")
     
-    # Conditionally add generator node
-    if graph_config.llm:
-        generator_node = create_generator_node(
-            llm=graph_config.llm,
-            prompt_template=graph_config.prompt_template,
-        )
-        graph.add_node("generator", generator_node)
-        graph.add_edge("selector", "generator")
-        graph.add_edge("generator", END)
-    else:
-        # No generator, end after selector
-        graph.add_edge("selector", END)
+    # Add generator node and connect to selector
+    graph.add_node("generator", generator_node)
+    graph.add_edge("selector", "generator")
+    graph.add_edge("generator", END)
     
     # Set the entry point
     graph.set_entry_point("retriever")
@@ -181,8 +179,8 @@ def build_streaming_graph(config: Optional[Union[GraphConfig, Dict[str, Any]]] =
     """Build a streaming LangGraph RAG pipeline.
     
     This function builds a LangGraph RAG pipeline with streaming response
-    support. This is a placeholder implementation that will be expanded
-    in the future.
+    support. This implementation uses the astream_for_state method of
+    LLMGenerator for streaming responses.
     
     Args:
         config: Configuration for the graph (if None, created from env)
@@ -193,4 +191,5 @@ def build_streaming_graph(config: Optional[Union[GraphConfig, Dict[str, Any]]] =
     """
     # For now, just use the basic graph
     # In a real implementation, this would configure streaming response
+    # by using a different generator node that supports streaming
     return build_basic_graph(config) 

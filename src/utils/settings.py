@@ -59,6 +59,15 @@ class Settings:
         self.openai_api_key = os.getenv("OPENAI_API_KEY", "")
         self.openai_model = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
         
+        # Chat LLM (from .env)
+        self.chat_llm_base_url = os.getenv("CHAT_LLM_BASE_URL", "https://api.openai.com/v1")
+        self.chat_llm_model = os.getenv("CHAT_LLM_MODEL", "gpt-3.5-turbo")
+        self.chat_llm_api_key = os.getenv("CHAT_LLM_API_KEY", self.openai_api_key)
+        
+        # OpenRouter specific settings
+        self.openrouter_referer = os.getenv("OPENROUTER_REFERER", "https://sentio.ai/")
+        self.openrouter_title = os.getenv("OPENROUTER_TITLE", "Sentio")
+        
         # Chunking
         self.chunk_size = int(os.getenv("CHUNK_SIZE", "512"))
         self.chunk_overlap = int(os.getenv("CHUNK_OVERLAP", "64"))

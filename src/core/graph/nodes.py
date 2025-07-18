@@ -191,27 +191,29 @@ def create_document_selector_node(
 
 
 def create_generator_node(
-    llm: BaseChatModel,
+    llm: Optional[BaseChatModel] = None,
     prompt_template: Optional[ChatPromptTemplate] = None,
+    mode: str = "balanced",
+    max_tokens: int = 1024,
 ) -> NodeFunction[RAGState]:
     """Create a generator node for the RAG pipeline.
     
     Args:
-        llm: The language model to use
-        prompt_template: Optional custom prompt template
+        llm: The language model to use (legacy LangChain support)
+        prompt_template: Optional custom prompt template (legacy LangChain support)
+        mode: Generation mode (fast, balanced, quality, creative)
+        max_tokens: Maximum tokens to generate
         
     Returns:
         A function that takes a RAGState and returns an updated RAGState
     """
+    # Import here to avoid circular imports
+    from src.core.llm.factory import create_generator
     
-    # Default RAG prompt if none provided
-    if prompt_template is None:
-        prompt_template = ChatPromptTemplate.from_messages([
-            ("system", "You are a helpful assistant that answers questions based on the provided context."),
-            ("user", "Context:\n{context}\n\nQuestion: {query}\n\nAnswer the question based on the context provided.")
-        ])
+    # Create LLM generator
+    generator = create_generator(mode=mode, max_tokens=max_tokens)
     
-    def generate_response_node(state: RAGState) -> RAGState:
+    async def generate_response_node(state: RAGState) -> RAGState:
         """Generate a response based on the selected documents.
         
         Args:
@@ -228,30 +230,8 @@ def create_generator_node(
         logger.info("Generating response for query: %s", state.query)
         
         try:
-            # Prepare context from selected documents
-            context = "\n\n".join([f"Document {i+1}:\n{doc.text}" for i, doc in enumerate(state.selected_documents)])
-            
-            # Prepare prompt variables
-            prompt_variables = {
-                "context": context,
-                "query": state.query,
-            }
-            
-            # Generate response
-            chain = prompt_template | llm
-            response = chain.invoke(prompt_variables)
-            
-            # Extract content from response
-            if hasattr(response, "content"):
-                response_text = response.content
-            else:
-                response_text = str(response)
-                
-            # Update state
-            state.set_response(response_text)
-            state.add_metadata("llm_type", type(llm).__name__)
-            
-            logger.info("Generated response of length %d", len(response_text))
+            # Use our LLM generator
+            return await generator.generate_for_state(state)
         except Exception as e:
             logger.error("Error generating response: %s", e)
             state.add_metadata("generator_error", str(e))
