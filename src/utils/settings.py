@@ -49,6 +49,11 @@ class Settings:
             os.getenv("JINA_API_KEY", "")  # Backwards compatibility
         )
         
+        # Reranker
+        self.reranker_model = os.getenv("RERANKER_MODEL", "jina-reranker-m0")
+        self.reranker_url = os.getenv("RERANKER_URL", "https://api.jina.ai/v1/rerank")
+        self.reranker_timeout = int(os.getenv("RERANKER_TIMEOUT", "30"))
+        
         # LLM
         self.llm_provider = os.getenv("LLM_PROVIDER", "openai")
         self.openai_api_key = os.getenv("OPENAI_API_KEY", "")

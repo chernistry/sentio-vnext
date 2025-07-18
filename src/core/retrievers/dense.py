@@ -41,14 +41,37 @@ class DenseRetriever(BaseRetriever):  # noqa: WPS110 – name is fine
     def retrieve(self, query: str, top_k: int = 10) -> List[Document]:  # noqa: D401 – simple
         logger.debug("DenseRetriever: searching for '%s' (top_k=%s)", query, top_k)
         query_vec = self._embedder.embed_sync(query)
-        points = self._client.search(
-            collection_name=self._collection,
-            query_vector=query_vec,
-            limit=top_k,
-            with_payload=True,
-            with_vectors=False,
-            vector_name=self._vector_name,
-        )
+        
+        # Prepare search params, handling vector_name parameter compatibility
+        search_params = {
+            "collection_name": self._collection,
+            "query_vector": query_vec,
+            "limit": top_k,
+            "with_payload": True,
+            "with_vectors": False,
+        }
+        
+        # Add vector_name parameter safely
+        try:
+            # Check if the client's search method accepts vector_name parameter
+            import inspect
+            search_sig = inspect.signature(self._client.search)
+            if "vector_name" in search_sig.parameters:
+                # If vector_name is supported, include it
+                search_params["vector_name"] = self._vector_name
+            
+            # Perform the search with appropriate parameters
+            points = self._client.search(**search_params)
+        except TypeError as e:
+            if "vector_name" in str(e):
+                # If vector_name causes TypeError, try without it
+                logger.warning("Vector name parameter not supported by Qdrant client: %s", e)
+                search_params.pop("vector_name", None)
+                points = self._client.search(**search_params)
+            else:
+                # Re-raise if it's a different error
+                raise
+        
         docs: List[Document] = []
         for p in points:
             text = (p.payload or {}).get("text") if isinstance(p.payload, dict) else None

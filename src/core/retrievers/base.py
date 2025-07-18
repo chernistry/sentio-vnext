@@ -3,11 +3,27 @@ from __future__ import annotations
 """Common interface for document retrievers."""
 
 import abc
-from typing import List, Protocol, Sequence
+from typing import List, Protocol, Sequence, Tuple
 
 from src.core.models.document import Document
 
-__all__ = ["BaseRetriever"]
+__all__ = ["BaseRetriever", "ScorerPlugin"]
+
+
+class ScorerPlugin(Protocol):
+    """Protocol for pluggable scoring components."""
+
+    def score(self, query: str, docs: List[Document]) -> List[float]:
+        """Score the documents for the query.
+        
+        Args:
+            query: The query string.
+            docs: List of documents to score.
+            
+        Returns:
+            List of scores corresponding to each document.
+        """
+        ...
 
 
 class BaseRetriever(abc.ABC):

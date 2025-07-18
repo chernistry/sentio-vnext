@@ -3,19 +3,29 @@ from __future__ import annotations
 """Retriever package public surface."""
 
 from importlib import import_module
-from typing import Any
+from typing import Any, List, Optional
 
 __all__ = [
     "get_retriever",
+    "get_scorer",
+    "ScorerPlugin"
 ]
+
+from .base import ScorerPlugin
 
 
 def get_retriever(kind: str, **kwargs: Any):  # noqa: D401 – simple
     """Return retriever instance by *kind* identifier.
 
     Args:
-        kind: Lower-case identifier (``"dense"``, ``"hybrid"``).
+        kind: Lower-case identifier (``"dense"``, ``"hybrid"``, ``"bm25"``, ``"pyserini"``).
         **kwargs: Forwarded to concrete constructor.
+        
+    Returns:
+        An initialized retriever instance
+        
+    Raises:
+        ValueError: If the specified retriever kind is not supported
     """
 
     kind = kind.lower()
@@ -34,5 +44,37 @@ def get_retriever(kind: str, **kwargs: Any):  # noqa: D401 – simple
                 "For hybrid retriever, 'dense_retriever' must be provided explicitly"
             )
         return module.HybridRetriever(**kwargs)
+    if kind in ("bm25", "sparse"):
+        module = import_module("src.core.retrievers.sparse")
+        return module.BM25Retriever(**kwargs)
+    if kind in ("pyserini", "lucene"):
+        module = import_module("src.core.retrievers.sparse")
+        return module.PyseriniBM25Retriever(**kwargs)
 
     raise ValueError(f"Unknown retriever kind: {kind}")
+
+
+def get_scorer(kind: str, **kwargs: Any) -> ScorerPlugin:
+    """Return a scorer plugin by kind identifier.
+    
+    Args:
+        kind: Lower-case identifier for scorer type
+        **kwargs: Forwarded to concrete constructor
+        
+    Returns:
+        An instantiated ScorerPlugin
+    
+    Raises:
+        ValueError: If the specified kind is not supported
+    """
+    module = import_module("src.core.retrievers.scorers")
+    
+    kind = kind.lower()
+    if kind == "keyword":
+        return module.KeywordMatchScorer(**kwargs)
+    if kind in ("recency", "time"):
+        return module.RecencyScorer(**kwargs)
+    if kind in ("semantic", "similarity"):
+        return module.SemanticSimilarityScorer(**kwargs)
+        
+    raise ValueError(f"Unknown scorer kind: {kind}")

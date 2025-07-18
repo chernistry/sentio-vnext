@@ -63,6 +63,9 @@ docs/                   # MkDocs
 - [x] Typer command `sentio ingest <path>`.
 - [x] Reads files, splits via TextChunker, stores raw chunks on disk (`data/`, temporary by default).
 - [x] Emits `chunks.parquet` for deterministic tests.
+- [x] **Extended**: Added robust error handling and logging.
+- [x] **Extended**: Implemented support for multiple file formats (TXT, PDF, DOCX, etc.).
+- [x] **Extended**: Added ingestion statistics tracking.
 
 ---
 
@@ -72,6 +75,9 @@ docs/                   # MkDocs
 - [x] Jina + OpenAI adapters behind factory.
 - [x] Memory cache with TTL (LFU).
 - [x] Warm-up on app start.
+- [x] **Extended**: Added robust error handling with retries.
+- [x] **Extended**: Implemented batch processing for efficiency.
+- [x] **Extended**: Added usage statistics tracking.
 
 ---
 
@@ -80,21 +86,23 @@ docs/                   # MkDocs
 - [x] Qdrant **Cloud** client wrapper `core.vector_store.QdrantStore` (reads `QDRANT_URL`).
 - [x] Collection bootstrap migration (create via REST if absent).
 - [x] Health-check ping to `/v1/collections`.
+- [x] **Extended**: Integrated with document ingestion pipeline.
+- [x] **Extended**: Implemented efficient batch upsert operations.
 
 ---
 
 ## 6 · Retrieval
 
-- [x] Dense search via Qdrant.
-- [x] Hybrid search (`SparseBM25 + Dense`) with RRF fusion.
-- [x] Pluggable scorers.
+- [ ] Dense search via Qdrant.
+- [ ] Hybrid search (`SparseBM25 + Dense`) with RRF fusion.
+- [ ] Pluggable scorers.
 
 ---
 
 ## 7 · Reranker
 
-- [x] Interface `Reranker.rerank(query, docs, top_k)`.
-- [x] Default: mini-cross-encoder (sentence-transformers) loaded lazily.
+- [ ] Interface `Reranker.rerank(query, docs, top_k)`.
+- [ ] Default: mini-cross-encoder (sentence-transformers) loaded lazily.
 
 ---
 

@@ -85,7 +85,8 @@ def mock_embedder():
     """Fixture providing a mock Embedder."""
     embedder = MagicMock()
     embedder.dimension = 3
-    embedder.aget_text_embedding_batch = AsyncMock(return_value=[
+    # Используем AsyncMock для асинхронных методов
+    embedder.embed_async_many = AsyncMock(return_value=[
         [0.1, 0.2, 0.3],
         [0.4, 0.5, 0.6],
         [0.7, 0.8, 0.9],
@@ -179,7 +180,7 @@ async def test_ingest_documents_pipeline(
     # Verify components were called
     ingestor._load_documents_from_directory.assert_called_once()
     mock_chunker.split.assert_called_once_with(sample_documents)
-    mock_embedder.aget_text_embedding_batch.assert_called_once()
+    mock_embedder.embed_async_many.assert_called_once()
     mock_vector_store._client.upsert.assert_called_once()
     
     # Check stats

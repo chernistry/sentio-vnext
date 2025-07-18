@@ -1,271 +1,196 @@
-"""
-Factory module for creating and configuring LangGraph instances.
+from __future__ import annotations
 
-This module provides functions to create and configure different types of RAG graphs
-using the LangGraph library. It serves as the main entry point for graph creation.
-"""
+"""Factory for building LangGraph RAG pipelines."""
 
 import logging
-from typing import Any, Dict, Optional, cast
+import os
+from typing import Dict, List, Optional, Any, Callable, Union, TypeVar, cast
 
+from langchain_core.language_models import BaseChatModel
+from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
-# Updated import: RunnableConfig is now provided by langchain_core.runnables
-from langchain_core.runnables import RunnableConfig
-# Опциональный импорт SqliteSaver
-try:
-    from langgraph_checkpoint_sqlite import SqliteSaver
-    SQLITE_SAVER_AVAILABLE = True
-except ImportError:
-    SQLITE_SAVER_AVAILABLE = False
-    print("Warning: langgraph_checkpoint_sqlite not found. Using in-memory state without persistence.")
 
-from src.core.retrievers.base import BaseRetriever
-from src.core.retrievers import get_retriever
-from src.core.rerankers.cross_encoder import CrossEncoderReranker
-from src.core.rerankers import get_reranker
-from src.core.graph.nodes import (
-    normalize_query,
-    retrieve_documents,
-    rerank_documents,
-    prepare_context,
-    generate_response,
-)
 from src.core.graph.state import RAGState
+from src.core.graph.nodes import (
+    create_retriever_node,
+    create_reranker_node,
+    create_document_selector_node,
+    create_generator_node,
+)
+from src.core.retrievers.base import BaseRetriever
+from src.core.rerankers.base import Reranker
+from src.core.retrievers.factory import create_retriever_for_graph
 
 logger = logging.getLogger(__name__)
 
 
-def build_basic_graph(config: Optional[RunnableConfig] = None) -> StateGraph:
-    """
-    Build a basic RAG graph with the standard pipeline nodes.
+class GraphConfig:
+    """Configuration for building a LangGraph RAG pipeline.
     
-    This creates a linear RAG pipeline with these steps:
-    normalize → retrieve → rerank → prepare_context → generate
+    This class holds the configuration for building a LangGraph RAG pipeline,
+    including the retriever, reranker, and LLM components.
+    
+    Attributes:
+        retriever: The retriever component
+        reranker: Optional reranker component
+        llm: The language model for generation
+        retrieval_top_k: Number of documents to retrieve
+        reranking_top_k: Number of documents to return after reranking
+        selection_top_k: Number of documents to select for generation
+        max_tokens: Maximum tokens for selected documents
+        prompt_template: Optional custom prompt template
+    """
+    
+    def __init__(
+        self,
+        retriever: Optional[BaseRetriever] = None,
+        reranker: Optional[Reranker] = None,
+        llm: Optional[BaseChatModel] = None,
+        retrieval_top_k: Optional[int] = None,
+        reranking_top_k: Optional[int] = None,
+        selection_top_k: Optional[int] = None,
+        max_tokens: Optional[int] = None,
+        prompt_template: Optional[ChatPromptTemplate] = None,
+    ):
+        """Initialize a GraphConfig instance.
+        
+        Args:
+            retriever: The retriever component (if None, created from env)
+            reranker: Optional reranker component (if None, created from env if USE_RERANKER=true)
+            llm: The language model for generation
+            retrieval_top_k: Number of documents to retrieve
+            reranking_top_k: Number of documents to return after reranking
+            selection_top_k: Number of documents to select for generation
+            max_tokens: Maximum tokens for selected documents
+            prompt_template: Optional custom prompt template
+        """
+        # Create retriever from environment if not provided
+        self.retriever = retriever or create_retriever_for_graph()
+        
+        # Create reranker from environment if not provided and enabled
+        self.reranker = reranker
+        if self.reranker is None and os.getenv("USE_RERANKER", "true").lower() == "true":
+            from src.core.rerankers import get_reranker
+            try:
+                self.reranker = get_reranker(kind="jina")
+                logger.info("Created reranker from environment configuration")
+            except Exception as e:
+                logger.error("Failed to create reranker: %s", e)
+                self.reranker = None
+        
+        # Set other parameters from environment if not provided
+        self.llm = llm
+        self.retrieval_top_k = retrieval_top_k or int(os.getenv("RETRIEVAL_TOP_K", "10"))
+        self.reranking_top_k = reranking_top_k or int(os.getenv("RERANKING_TOP_K", "5"))
+        self.selection_top_k = selection_top_k or int(os.getenv("SELECTION_TOP_K", "3"))
+        self.max_tokens = max_tokens or 2000
+        self.prompt_template = prompt_template
+
+
+def build_basic_graph(config: Optional[Union[GraphConfig, Dict[str, Any]]] = None) -> StateGraph:
+    """Build a basic LangGraph RAG pipeline.
+    
+    This function builds a basic LangGraph RAG pipeline with the following nodes:
+    - retriever: Retrieves documents from the vector store
+    - reranker: Reranks documents (optional)
+    - selector: Selects documents for generation
+    - generator: Generates a response
     
     Args:
-        config: Configuration dictionary with parameters for the graph components
+        config: Configuration for the graph (if None, created from env)
+               Can be either a GraphConfig object or a dict with configuration
         
     Returns:
-        Compiled LangGraph StateGraph
+        A compiled LangGraph StateGraph
     """
-    # Normalize config
+    # Handle different config types
     if config is None:
-        config = cast(Dict[str, Any], {})  # fallback to empty dict
-
-    # Extract configuration
-    retriever_cfg = config.get("retriever", {})
-    reranker_cfg = config.get("reranker", {})
-    
-    # Create components based on configuration
-    retriever = None
-    reranker = None
-    
-    mode = config.get('mode', '')
-    if 'mock' not in mode:
-        # Проверяем наличие необходимых параметров для DenseRetriever
-        if retriever_cfg.get("kind", "dense") == "dense" and (
-            "client" not in retriever_cfg or
-            "embedder" not in retriever_cfg or
-            "collection_name" not in retriever_cfg
-        ):
-            logger.warning("Missing required arguments for DenseRetriever. Falling back to mock mode.")
-            # Принудительно устанавливаем режим mock, чтобы избежать создания retriever
-            mode = 'mock'
-            config['mode'] = mode
-        else:
-            try:
-                # Create retriever
-                retriever = get_retriever(
-                    kind=retriever_cfg.get("kind", "dense"),
-                    **retriever_cfg,
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize retriever: {e}. Falling back to mock mode.")
-                mode = 'mock'
-                config['mode'] = mode
-
-        if 'mock' not in mode:
-            # Always (re)create reranker from config – cheap and keeps config isolated
-            try:
-                reranker = get_reranker(
-                    kind=reranker_cfg.get("kind", "cross-encoder"),
-                    model_name=reranker_cfg.get("model_name", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize reranker: {e}. Falling back to mock mode.")
-                mode = 'mock'
-                config['mode'] = mode
-    
-    # Create graph
-    builder = StateGraph(RAGState)
-    
-    # Define nodes with partial functions to include dependencies
-    builder.add_node("normalize", lambda state: normalize_query(state))
-    builder.add_node(
-        "retrieve", 
-        lambda state: retrieve_documents(
-            state, 
-            retriever=retriever,
-            top_k=retriever_cfg.get("top_k", 10),
+        # Create config from environment if not provided
+        graph_config = GraphConfig()
+    elif isinstance(config, dict):
+        # Convert dict to GraphConfig
+        logger.info("Converting dict config to GraphConfig")
+        # Extract known parameters from dict
+        graph_config = GraphConfig(
+            retrieval_top_k=config.get("retrieval_top_k"),
+            reranking_top_k=config.get("reranking_top_k"),
+            selection_top_k=config.get("selection_top_k"),
+            max_tokens=config.get("max_tokens"),
         )
-    )
-    builder.add_node(
-        "rerank", 
-        lambda state: rerank_documents(
-            state, 
-            reranker=reranker,
-            top_k=reranker_cfg.get("top_k", 5),
-        )
-    )
-    builder.add_node(
-        "prepare_context",
-        lambda state: prepare_context(
-            state,
-            max_tokens=config.get("max_context_tokens", 3000),
-        )
-    )
-    builder.add_node("generate", lambda state: generate_response(state))
-    
-    # Set the edges: linear pipeline
-    builder.set_entry_point("normalize")
-    builder.add_edge("normalize", "retrieve")
-    builder.add_edge("retrieve", "rerank")
-    builder.add_edge("rerank", "prepare_context")
-    builder.add_edge("prepare_context", "generate")
-    builder.add_edge("generate", END)
-    
-    # Компилируем граф
-    if SQLITE_SAVER_AVAILABLE:
-        memory = SqliteSaver.from_conn_string(":memory:")
-        graph = builder.compile(checkpointer=memory)
     else:
-        # Компиляция без чекпоинтера (хранение состояния только в памяти)
-        graph = builder.compile()
+        # Use provided GraphConfig
+        graph_config = config
+        
+    # Create the graph
+    graph = StateGraph(RAGState)
     
-    logger.info("Built basic RAG graph with %d nodes", len(builder.nodes))
+    # Create nodes
+    retriever_node = create_retriever_node(
+        retriever=graph_config.retriever,
+        top_k=graph_config.retrieval_top_k,
+    )
     
-    # Создаем функцию-обертку для обработки результатов
-    def process_result(result):
-        # Если результат является словарем, преобразуем его в RAGState
-        if isinstance(result, dict):
-            # Создаем новый объект RAGState с данными из результата
-            new_state = RAGState(query=result.get("query", ""))
-            # Обновляем его полями из результата
-            for key, value in result.items():
-                setattr(new_state, key, value)
-            return new_state
-        return result
+    selector_node = create_document_selector_node(
+        top_k=graph_config.selection_top_k,
+        max_tokens=graph_config.max_tokens,
+    )
     
-    # Возвращаем граф и функцию-обертку для обработки результатов
-    # Не модифицируем сам объект графа, чтобы избежать ошибок при копировании
-    return graph
+    # Add retriever node
+    graph.add_node("retriever", retriever_node)
+    
+    # Conditionally add reranker node
+    if graph_config.reranker:
+        reranker_node = create_reranker_node(
+            reranker=graph_config.reranker,
+            top_k=graph_config.reranking_top_k,
+        )
+        graph.add_node("reranker", reranker_node)
+        
+        # Connect retriever to reranker
+        graph.add_edge("retriever", "reranker")
+        
+        # Connect reranker to selector
+        graph.add_node("selector", selector_node)
+        graph.add_edge("reranker", "selector")
+    else:
+        # No reranker, connect retriever directly to selector
+        graph.add_node("selector", selector_node)
+        graph.add_edge("retriever", "selector")
+    
+    # Conditionally add generator node
+    if graph_config.llm:
+        generator_node = create_generator_node(
+            llm=graph_config.llm,
+            prompt_template=graph_config.prompt_template,
+        )
+        graph.add_node("generator", generator_node)
+        graph.add_edge("selector", "generator")
+        graph.add_edge("generator", END)
+    else:
+        # No generator, end after selector
+        graph.add_edge("selector", END)
+    
+    # Set the entry point
+    graph.set_entry_point("retriever")
+    
+    # Compile the graph
+    return graph.compile()
 
 
-def build_streaming_graph(config: Optional[RunnableConfig] = None) -> StateGraph:
-    """
-    Build a streaming RAG graph that supports streaming responses.
-
-    Similar to the basic graph but optimized for streaming output.
-
+def build_streaming_graph(config: Optional[Union[GraphConfig, Dict[str, Any]]] = None) -> StateGraph:
+    """Build a streaming LangGraph RAG pipeline.
+    
+    This function builds a LangGraph RAG pipeline with streaming response
+    support. This is a placeholder implementation that will be expanded
+    in the future.
+    
     Args:
-        config: Configuration dictionary with parameters for the graph components
-
+        config: Configuration for the graph (if None, created from env)
+               Can be either a GraphConfig object or a dict with configuration
+        
     Returns:
-        Compiled LangGraph StateGraph with streaming support
+        A compiled LangGraph StateGraph with streaming support
     """
-    # Normalize config
-    if config is None:
-        config = cast(Dict[str, Any], {})
-
-    # Extract configuration
-    retriever_cfg = config.get("retriever", {})
-    reranker_cfg = config.get("reranker", {})
-
-    # Create components based on configuration
-    retriever = None
-    reranker = None
-
-    mode = config.get('mode', '')
-    if 'mock' not in mode:
-        # Проверяем наличие необходимых параметров для DenseRetriever
-        if retriever_cfg.get("kind", "dense") == "dense" and (
-            "client" not in retriever_cfg or
-            "embedder" not in retriever_cfg or
-            "collection_name" not in retriever_cfg
-        ):
-            logger.warning("Missing required arguments for DenseRetriever. Falling back to mock mode.")
-            # Принудительно устанавливаем режим mock, чтобы избежать создания retriever
-            mode = 'mock'
-            config['mode'] = mode
-        else:
-            try:
-                # Create retriever
-                retriever = get_retriever(
-                    kind=retriever_cfg.get("kind", "dense"),
-                    **retriever_cfg,
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize retriever: {e}. Falling back to mock mode.")
-                mode = 'mock'
-                config['mode'] = mode
-
-        if 'mock' not in mode:
-            try:
-                # Create reranker
-                reranker = get_reranker(
-                    kind=reranker_cfg.get("kind", "cross-encoder"),
-                    model_name=reranker_cfg.get("model_name", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize reranker: {e}. Falling back to mock mode.")
-                mode = 'mock'
-                config['mode'] = mode
-
-    # Create graph
-    builder = StateGraph(RAGState)
-
-    # Define nodes with partial functions to include dependencies
-    builder.add_node("normalize", lambda state: normalize_query(state))
-    builder.add_node(
-        "retrieve",
-        lambda state: retrieve_documents(
-            state,
-            retriever=retriever,
-            top_k=retriever_cfg.get("top_k", 10),
-        ),
-    )
-    builder.add_node(
-        "rerank",
-        lambda state: rerank_documents(
-            state,
-            reranker=reranker,
-            top_k=reranker_cfg.get("top_k", 5),
-        ),
-    )
-    builder.add_node(
-        "prepare_context",
-        lambda state: prepare_context(
-            state,
-            max_tokens=config.get("max_context_tokens", 3000),
-        ),
-    )
-    builder.add_node("generate", lambda state: generate_response(state, stream=True))
-
-    # Set the edges: linear pipeline
-    builder.set_entry_point("normalize")
-    builder.add_edge("normalize", "retrieve")
-    builder.add_edge("retrieve", "rerank")
-    builder.add_edge("rerank", "prepare_context")
-    builder.add_edge("prepare_context", "generate")
-    builder.add_edge("generate", END)
-
-    # Compile graph with (optional) persistence checker
-    if SQLITE_SAVER_AVAILABLE:
-        memory = SqliteSaver.from_conn_string(":memory:")
-        graph = builder.compile(checkpointer=memory)
-    else:
-        graph = builder.compile()
-
-    logger.info("Built streaming RAG graph with %d nodes", len(builder.nodes))
-
-    return graph 
+    # For now, just use the basic graph
+    # In a real implementation, this would configure streaming response
+    return build_basic_graph(config) 

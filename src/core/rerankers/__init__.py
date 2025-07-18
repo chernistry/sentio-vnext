@@ -11,12 +11,20 @@ __all__ = ["get_reranker"]
 def get_reranker(kind: str | None = None, **kwargs: Any):  # noqa: D401 – simple
     """Return a reranker instance.
 
-    Currently supports only ``"cross-encoder"`` (default).
+    Args:
+        kind: Lower-case identifier for reranker type (default: "jina")
+        **kwargs: Additional keyword arguments passed to the reranker constructor
+
+    Returns:
+        An initialized reranker instance
+
+    Raises:
+        ValueError: If the specified reranker kind is not supported
     """
-
-    kind = (kind or "cross-encoder").lower()
-    if kind in {"cross", "cross-encoder", "mini-cross"}:
-        module = import_module("src.core.rerankers.cross_encoder")
-        return module.CrossEncoderReranker(**kwargs)
-
+    kind = (kind or "jina").lower()
+    
+    if kind in {"jina", "jina-reranker"}:
+        module = import_module("src.core.rerankers.jina_reranker")
+        return module.JinaReranker(**kwargs)
+        
     raise ValueError(f"Unknown reranker kind: {kind}")
