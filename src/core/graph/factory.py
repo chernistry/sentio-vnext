@@ -9,7 +9,8 @@ import logging
 from typing import Any, Dict, Optional, cast
 
 from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import RunnableConfig
+# Updated import: RunnableConfig is now provided by langchain_core.runnables
+from langchain_core.runnables import RunnableConfig
 # Опциональный импорт SqliteSaver
 try:
     from langgraph_checkpoint_sqlite import SqliteSaver
@@ -34,7 +35,7 @@ from src.core.graph.state import RAGState
 logger = logging.getLogger(__name__)
 
 
-def build_basic_graph(config: RunnableConfig) -> StateGraph:
+def build_basic_graph(config: Optional[RunnableConfig] = None) -> StateGraph:
     """
     Build a basic RAG graph with the standard pipeline nodes.
     
@@ -47,6 +48,10 @@ def build_basic_graph(config: RunnableConfig) -> StateGraph:
     Returns:
         Compiled LangGraph StateGraph
     """
+    # Normalize config
+    if config is None:
+        config = cast(Dict[str, Any], {})  # fallback to empty dict
+
     # Extract configuration
     retriever_cfg = config.get("retriever", {})
     reranker_cfg = config.get("reranker", {})
@@ -55,18 +60,41 @@ def build_basic_graph(config: RunnableConfig) -> StateGraph:
     retriever = None
     reranker = None
     
-    if 'mock' not in config.get('mode', ''):
-        # Create retriever
-        retriever = get_retriever(
-            kind=retriever_cfg.get("kind", "dense"),
-            **retriever_cfg,
-        )
-        
-        # Create reranker
-        reranker = get_reranker(
-            kind=reranker_cfg.get("kind", "cross-encoder"),
-            model_name=reranker_cfg.get("model_name", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
-        )
+    mode = config.get('mode', '')
+    if 'mock' not in mode:
+        # Проверяем наличие необходимых параметров для DenseRetriever
+        if retriever_cfg.get("kind", "dense") == "dense" and (
+            "client" not in retriever_cfg or
+            "embedder" not in retriever_cfg or
+            "collection_name" not in retriever_cfg
+        ):
+            logger.warning("Missing required arguments for DenseRetriever. Falling back to mock mode.")
+            # Принудительно устанавливаем режим mock, чтобы избежать создания retriever
+            mode = 'mock'
+            config['mode'] = mode
+        else:
+            try:
+                # Create retriever
+                retriever = get_retriever(
+                    kind=retriever_cfg.get("kind", "dense"),
+                    **retriever_cfg,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize retriever: {e}. Falling back to mock mode.")
+                mode = 'mock'
+                config['mode'] = mode
+
+        if 'mock' not in mode:
+            # Always (re)create reranker from config – cheap and keeps config isolated
+            try:
+                reranker = get_reranker(
+                    kind=reranker_cfg.get("kind", "cross-encoder"),
+                    model_name=reranker_cfg.get("model_name", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize reranker: {e}. Falling back to mock mode.")
+                mode = 'mock'
+                config['mode'] = mode
     
     # Create graph
     builder = StateGraph(RAGState)
@@ -116,90 +144,113 @@ def build_basic_graph(config: RunnableConfig) -> StateGraph:
     
     logger.info("Built basic RAG graph with %d nodes", len(builder.nodes))
     
-    # Обертка для сохранения интерфейса
-    original_invoke = graph.invoke
-    
-    def wrapped_invoke(state, *args, **kwargs):
-        result = original_invoke(state, *args, **kwargs)
-        
+    # Создаем функцию-обертку для обработки результатов
+    def process_result(result):
         # Если результат является словарем, преобразуем его в RAGState
         if isinstance(result, dict):
-            # Создаем новый объект RAGState с данными из state
-            new_state = RAGState(query=state.query)
+            # Создаем новый объект RAGState с данными из результата
+            new_state = RAGState(query=result.get("query", ""))
             # Обновляем его полями из результата
             for key, value in result.items():
                 setattr(new_state, key, value)
             return new_state
         return result
     
-    graph.invoke = wrapped_invoke
-    
+    # Возвращаем граф и функцию-обертку для обработки результатов
+    # Не модифицируем сам объект графа, чтобы избежать ошибок при копировании
     return graph
 
 
-def build_streaming_graph(config: RunnableConfig) -> StateGraph:
+def build_streaming_graph(config: Optional[RunnableConfig] = None) -> StateGraph:
     """
     Build a streaming RAG graph that supports streaming responses.
-    
+
     Similar to the basic graph but optimized for streaming output.
-    
+
     Args:
         config: Configuration dictionary with parameters for the graph components
-        
+
     Returns:
         Compiled LangGraph StateGraph with streaming support
     """
+    # Normalize config
+    if config is None:
+        config = cast(Dict[str, Any], {})
+
     # Extract configuration
     retriever_cfg = config.get("retriever", {})
     reranker_cfg = config.get("reranker", {})
-    
+
     # Create components based on configuration
     retriever = None
     reranker = None
-    
-    if 'mock' not in config.get('mode', ''):
-        # Create retriever
-        retriever = get_retriever(
-            kind=retriever_cfg.get("kind", "dense"),
-            **retriever_cfg,
-        )
-        
-        # Create reranker
-        reranker = get_reranker(
-            kind=reranker_cfg.get("kind", "cross-encoder"),
-            model_name=reranker_cfg.get("model_name", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
-        )
-    
+
+    mode = config.get('mode', '')
+    if 'mock' not in mode:
+        # Проверяем наличие необходимых параметров для DenseRetriever
+        if retriever_cfg.get("kind", "dense") == "dense" and (
+            "client" not in retriever_cfg or
+            "embedder" not in retriever_cfg or
+            "collection_name" not in retriever_cfg
+        ):
+            logger.warning("Missing required arguments for DenseRetriever. Falling back to mock mode.")
+            # Принудительно устанавливаем режим mock, чтобы избежать создания retriever
+            mode = 'mock'
+            config['mode'] = mode
+        else:
+            try:
+                # Create retriever
+                retriever = get_retriever(
+                    kind=retriever_cfg.get("kind", "dense"),
+                    **retriever_cfg,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize retriever: {e}. Falling back to mock mode.")
+                mode = 'mock'
+                config['mode'] = mode
+
+        if 'mock' not in mode:
+            try:
+                # Create reranker
+                reranker = get_reranker(
+                    kind=reranker_cfg.get("kind", "cross-encoder"),
+                    model_name=reranker_cfg.get("model_name", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize reranker: {e}. Falling back to mock mode.")
+                mode = 'mock'
+                config['mode'] = mode
+
     # Create graph
     builder = StateGraph(RAGState)
-    
+
     # Define nodes with partial functions to include dependencies
     builder.add_node("normalize", lambda state: normalize_query(state))
     builder.add_node(
-        "retrieve", 
+        "retrieve",
         lambda state: retrieve_documents(
-            state, 
+            state,
             retriever=retriever,
             top_k=retriever_cfg.get("top_k", 10),
-        )
+        ),
     )
     builder.add_node(
-        "rerank", 
+        "rerank",
         lambda state: rerank_documents(
-            state, 
+            state,
             reranker=reranker,
             top_k=reranker_cfg.get("top_k", 5),
-        )
+        ),
     )
     builder.add_node(
         "prepare_context",
         lambda state: prepare_context(
             state,
             max_tokens=config.get("max_context_tokens", 3000),
-        )
+        ),
     )
     builder.add_node("generate", lambda state: generate_response(state, stream=True))
-    
+
     # Set the edges: linear pipeline
     builder.set_entry_point("normalize")
     builder.add_edge("normalize", "retrieve")
@@ -207,14 +258,14 @@ def build_streaming_graph(config: RunnableConfig) -> StateGraph:
     builder.add_edge("rerank", "prepare_context")
     builder.add_edge("prepare_context", "generate")
     builder.add_edge("generate", END)
-    
-    # Компилируем граф с поддержкой стриминга
+
+    # Compile graph with (optional) persistence checker
     if SQLITE_SAVER_AVAILABLE:
         memory = SqliteSaver.from_conn_string(":memory:")
         graph = builder.compile(checkpointer=memory)
     else:
         graph = builder.compile()
-    
+
     logger.info("Built streaming RAG graph with %d nodes", len(builder.nodes))
-    
+
     return graph 

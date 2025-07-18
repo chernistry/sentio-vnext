@@ -12,12 +12,13 @@ import sys
 import os
 from typing import Optional, Dict, Any
 
-# Add the src directory to the path
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
+# Add the project root directory to the path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
-from core.graph import build_basic_graph
-from core.graph.state import RAGState
-from core.retrievers import get_retriever
+from src.core.graph import build_basic_graph
+from src.core.graph.state import RAGState
+from src.core.retrievers import get_retriever
 
 # Configure logging
 logging.basicConfig(
@@ -57,11 +58,12 @@ def run_rag_graph(query: str, config: Optional[Dict[str, Any]] = None) -> RAGSta
     """
     config = config or {}
     
-    # Create retriever - can be customized based on config
-    retriever = get_retriever(kind="hybrid")
+    # Установка режима mock для локального запуска
+    if 'mode' not in config:
+        config['mode'] = 'mock'
     
     # Build the graph
-    graph = build_basic_graph(retriever=retriever, config=config)
+    graph = build_basic_graph(config=config)
     logger.info("Created LangGraph RAG pipeline")
     
     # Create initial state
@@ -69,7 +71,15 @@ def run_rag_graph(query: str, config: Optional[Dict[str, Any]] = None) -> RAGSta
     
     # Run the graph
     logger.info("Running graph with query: %s", query)
-    result = graph.invoke(state)
+    raw_result = graph.invoke(state)
+    
+    # Преобразуем результат в RAGState, если это словарь
+    if isinstance(raw_result, dict):
+        result = RAGState(query=query)
+        for key, value in raw_result.items():
+            setattr(result, key, value)
+    else:
+        result = raw_result
     
     return result
 
@@ -83,13 +93,16 @@ def main() -> None:
                         help="Launch LangGraph Studio")
     parser.add_argument("--studio-port", type=int, default=8001,
                         help="Port for LangGraph Studio")
+    parser.add_argument("--mock", action="store_true", default=True,
+                        help="Run in mock mode without real retrievers")
     args = parser.parse_args()
     
     if args.studio:
         setup_langgraph_studio(port=args.studio_port)
     
     # Run the graph
-    result = run_rag_graph(args.query)
+    config = {'mode': 'mock'} if args.mock else {}
+    result = run_rag_graph(args.query, config=config)
     
     # Print results
     print("\n" + "=" * 40)

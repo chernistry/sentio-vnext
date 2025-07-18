@@ -23,22 +23,22 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 
-from utils.settings import settings
+from src.utils.settings import settings
 
 __all__ = ["QdrantStore"]
 
 logger = logging.getLogger(__name__)
 
 
-def _get_default_timeout() -> httpx.Timeout:
-    return httpx.Timeout(5.0, connect=2.0)
+def _get_default_timeout() -> float:
+    return 10.0
 
 
 @dataclass(slots=True)
 class QdrantStore(VectorStore):  # noqa: WPS110 (data‐class is fine)
     """Wrapper around :pymod:`qdrant_client` with helper routines.
 
-    The class supports both public Qdrant Cloud and self-hosted instances.
+    The class supports Qdrant Cloud instances.
     *URL* and *API key* are resolved from environment variables unless
     provided explicitly.
 
@@ -49,11 +49,11 @@ class QdrantStore(VectorStore):  # noqa: WPS110 (data‐class is fine)
     """
 
     collection_name: str
-    vector_size: int = 1536
+    vector_size: int = 1024
     distance: str = "Cosine"
     url: Optional[str] = None
     api_key: Optional[str] = None
-    timeout: httpx.Timeout = field(default_factory=_get_default_timeout)
+    timeout: float = field(default_factory=_get_default_timeout)
     embedding: Optional[Embeddings] = None
     content_payload_key: str = "content"
     metadata_payload_key: str = "metadata"
@@ -67,14 +67,25 @@ class QdrantStore(VectorStore):  # noqa: WPS110 (data‐class is fine)
         """Initialise underlying Qdrant client and ensure collection exists."""
 
         # Resolve configuration lazily to make the class test-friendly.
-        resolved_url = self.url or getattr(settings, "qdrant_url", None) or os.getenv("QDRANT_URL")
+        resolved_url = self.url or settings.qdrant_url
         if resolved_url is None:
             raise ValueError("QDRANT_URL env var or 'url' argument must be provided.")
 
-        resolved_key = self.api_key or getattr(settings, "qdrant_api_key", None) or os.getenv("QDRANT_API_KEY")
+        resolved_key = self.api_key or settings.qdrant_api_key
+        if resolved_key is None:
+            raise ValueError("QDRANT_API_KEY env var or 'api_key' argument must be provided.")
+
+        # Ensure HTTPS for cloud instances
+        if ".cloud.qdrant.io" in resolved_url:
+            if not resolved_url.startswith("https://"):
+                resolved_url = f"https://{resolved_url.removeprefix('http://')}"
+                logger.info("Converted Qdrant cloud URL to HTTPS: %s", resolved_url)
+        
+        # For debugging
+        logger.debug("Connecting to Qdrant at %s", resolved_url)
 
         # Instantiate client (sync for now).
-        self._client = QdrantClient(url=resolved_url, api_key=resolved_key, timeout=self.timeout)  # type: ignore[arg-type]
+        self._client = QdrantClient(url=resolved_url, api_key=resolved_key, timeout=self.timeout)
 
         logger.debug("Qdrant client initialised (url=%s, collection=%s)", resolved_url, self.collection_name)
 
@@ -330,7 +341,7 @@ class QdrantStore(VectorStore):  # noqa: WPS110 (data‐class is fine)
                 # Embed the first text to get the vector size
                 vector_size = len(embedding.embed_query(texts[0]))
             else:
-                vector_size = 1536  # Default size
+                vector_size = 1024  # Default size
 
         instance = cls(
             collection_name=collection_name,

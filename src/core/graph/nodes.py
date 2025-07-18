@@ -5,7 +5,7 @@ This module contains the node functions that implement each step of the RAG pipe
 Each node takes a RAGState and returns an updated RAGState.
 """
 
-from typing import Dict, Any, List, TypeVar, cast
+from typing import Dict, Any, List, TypeVar, cast, Optional
 import logging
 from copy import deepcopy
 
@@ -38,7 +38,7 @@ def normalize_query(state: RAGState) -> Dict[str, Any]:
 
 def retrieve_documents(
     state: RAGState, 
-    retriever: BaseRetriever,
+    retriever: Optional[BaseRetriever] = None,
     top_k: int = 10
 ) -> Dict[str, Any]:
     """
@@ -53,6 +53,21 @@ def retrieve_documents(
         Dict with retrieved documents
     """
     query = state.normalized_query or state.query
+    
+    if retriever is None:
+        logger.warning("No retriever provided, using mock documents")
+        # Создаем заглушки для документов в режиме mock
+        mock_docs = [
+            Document(
+                id=f"mock-doc-{i}",
+                text=f"This is a mock document {i} for query: '{query}'.",
+                metadata={"source": f"mock-source-{i}", "score": 1.0 - (i * 0.1)}
+            )
+            for i in range(min(top_k, 5))  # Создаем меньше документов в mock режиме
+        ]
+        logger.info("Created %d mock documents for query: %s", len(mock_docs), query)
+        return {"retrieved_documents": mock_docs}
+    
     docs = retriever.retrieve(query, top_k=top_k)
     
     logger.info("Retrieved %d documents for query: %s", len(docs), query)
@@ -62,7 +77,7 @@ def retrieve_documents(
 
 def rerank_documents(
     state: RAGState, 
-    reranker: CrossEncoderReranker,
+    reranker: Optional[CrossEncoderReranker] = None,
     top_k: int = 5
 ) -> Dict[str, Any]:
     """
@@ -81,6 +96,16 @@ def rerank_documents(
         return {"reranked_documents": []}
     
     query = state.normalized_query or state.query
+    
+    if reranker is None:
+        logger.warning("No reranker provided, using mock reranking")
+        # Просто копируем документы и добавляем rerank_score в режиме mock
+        mock_reranked = deepcopy(state.retrieved_documents[:top_k])
+        for i, doc in enumerate(mock_reranked):
+            doc.metadata["rerank_score"] = 0.9 - (i * 0.1)
+        logger.info("Mock reranked %d documents", len(mock_reranked))
+        return {"reranked_documents": mock_reranked}
+    
     reranked_docs = reranker.rerank(
         query=query,
         docs=state.retrieved_documents,

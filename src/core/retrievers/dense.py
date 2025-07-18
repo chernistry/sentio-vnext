@@ -7,9 +7,9 @@ from typing import List, Optional
 
 from qdrant_client import QdrantClient
 
-from core.embeddings.base import BaseEmbedder
-from core.models.document import Document
-from core.vector_store.qdrant_store import QdrantStore
+from src.core.embeddings.base import BaseEmbedder
+from src.core.models.document import Document
+from src.core.vector_store.qdrant_store import QdrantStore
 from .base import BaseRetriever
 
 logger = logging.getLogger(__name__)

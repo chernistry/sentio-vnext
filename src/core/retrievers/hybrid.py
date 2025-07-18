@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 
 from rank_bm25 import BM25Okapi  # Lightweight BM25 implementation
 
-from core.models.document import Document
+from src.core.models.document import Document
 from .base import BaseRetriever
 from .dense import DenseRetriever
 

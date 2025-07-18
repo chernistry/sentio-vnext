@@ -29,7 +29,7 @@ def get_vector_store(name: str, **kwargs: Any):  # noqa: D401 – simple
 
     name = name.lower()
     if name == "qdrant":
-        module = import_module("core.vector_store.qdrant_store")
+        module = import_module("src.core.vector_store.qdrant_store")
         return module.QdrantStore(**kwargs)
 
     raise ValueError(f"Unknown vector store backend: {name}") 

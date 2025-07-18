@@ -20,10 +20,10 @@ def get_retriever(kind: str, **kwargs: Any):  # noqa: D401 – simple
 
     kind = kind.lower()
     if kind == "dense":
-        module = import_module("core.retrievers.dense")
+        module = import_module("src.core.retrievers.dense")
         return module.DenseRetriever(**kwargs)
     if kind == "hybrid":
-        module = import_module("core.retrievers.hybrid")
+        module = import_module("src.core.retrievers.hybrid")
         # Extract top_k from kwargs as it's not a parameter for HybridRetriever constructor
         kwargs.pop("top_k", 10)
         # In a test environment, mock objects might be passed directly

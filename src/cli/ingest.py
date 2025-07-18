@@ -2,7 +2,7 @@
 Ingestion CLI for Sentio RAG system.
 
 This module provides the command-line interface for ingesting documents into 
-the Sentio RAG system. It uses the DocumentIngestor from core.ingest to process
+the Sentio RAG system. It uses the DocumentIngestor from src.core.ingest to process
 and store documents in the vector database.
 """
 

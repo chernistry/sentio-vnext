@@ -10,6 +10,16 @@ import os
 from pathlib import Path
 from typing import Dict, Any
 
+# Try to load .env file if it exists
+try:
+    from dotenv import load_dotenv
+    env_path = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+        logging.getLogger(__name__).info(f"Loaded environment variables from {env_path}")
+except ImportError:
+    logging.getLogger(__name__).warning("python-dotenv not installed, skipping .env loading")
+
 logger = logging.getLogger(__name__)
 
 

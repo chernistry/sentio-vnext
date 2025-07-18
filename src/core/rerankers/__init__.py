@@ -16,7 +16,7 @@ def get_reranker(kind: str | None = None, **kwargs: Any):  # noqa: D401 – simp
 
     kind = (kind or "cross-encoder").lower()
     if kind in {"cross", "cross-encoder", "mini-cross"}:
-        module = import_module("core.rerankers.cross_encoder")
+        module = import_module("src.core.rerankers.cross_encoder")
         return module.CrossEncoderReranker(**kwargs)
 
     raise ValueError(f"Unknown reranker kind: {kind}")

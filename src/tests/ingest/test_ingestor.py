@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 
-from core.ingest.ingest import DocumentIngestor
-from core.models.document import Document
+from src.core.ingest.ingest import DocumentIngestor
+from src.core.models.document import Document
 
 
 @pytest.fixture
