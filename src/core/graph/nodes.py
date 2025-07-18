@@ -9,10 +9,10 @@ from typing import Dict, Any, List, TypeVar, cast
 import logging
 from copy import deepcopy
 
-from core.models.document import Document
-from core.retrievers.base import BaseRetriever
-from core.rerankers.cross_encoder import CrossEncoderReranker
-from core.graph.state import RAGState
+from src.core.models.document import Document
+from src.core.retrievers.base import BaseRetriever
+from src.core.rerankers.cross_encoder import CrossEncoderReranker
+from src.core.graph.state import RAGState
 
 logger = logging.getLogger(__name__)
 
@@ -125,12 +125,13 @@ def prepare_context(state: RAGState, max_tokens: int = 3000) -> Dict[str, Any]:
     return {"context": context}
 
 
-def generate_response(state: RAGState) -> Dict[str, Any]:
+def generate_response(state: RAGState, stream: bool = False) -> Dict[str, Any]:
     """
     Generate response based on context and query (placeholder).
     
     Args:
         state: Current RAG pipeline state
+        stream: If True, prepare for streaming response
         
     Returns:
         Dict with generated response
@@ -143,6 +144,15 @@ def generate_response(state: RAGState) -> Dict[str, Any]:
         f"Context length: {len(state.context)} characters. "
         f"Number of documents: {len(state.reranked_documents or state.retrieved_documents)}"
     )
+    
+    if stream:
+        logger.info("Generated streaming placeholder response")
+        # In a real implementation, this would return a generator or async iterator
+        # For now, we'll just set a flag to indicate streaming is enabled
+        return {
+            "response": placeholder_response,
+            "is_streaming": True
+        }
     
     logger.info("Generated placeholder response of %d chars", len(placeholder_response))
     

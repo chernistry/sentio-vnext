@@ -5,7 +5,7 @@ from __future__ import annotations
 import abc
 from typing import List, Protocol, Sequence
 
-from core.models.document import Document
+from src.core.models.document import Document
 
 __all__ = ["BaseRetriever"]
 

@@ -30,7 +30,8 @@ __all__ = ["QdrantStore"]
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_TIMEOUT = httpx.Timeout(5.0, connect=2.0)
+def _get_default_timeout() -> httpx.Timeout:
+    return httpx.Timeout(5.0, connect=2.0)
 
 
 @dataclass(slots=True)
@@ -52,7 +53,7 @@ class QdrantStore(VectorStore):  # noqa: WPS110 (data‐class is fine)
     distance: str = "Cosine"
     url: Optional[str] = None
     api_key: Optional[str] = None
-    timeout: httpx.Timeout = field(default=DEFAULT_TIMEOUT)
+    timeout: httpx.Timeout = field(default_factory=_get_default_timeout)
     embedding: Optional[Embeddings] = None
     content_payload_key: str = "content"
     metadata_payload_key: str = "metadata"

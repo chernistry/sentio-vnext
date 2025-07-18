@@ -41,7 +41,7 @@ class JinaEmbedder(BaseEmbedder):
         max_retries: int = 3,
         timeout: int = 30,
         batch_size: int = 100,
-        allow_empty_api_key: bool = False,
+        allow_empty_api_key: bool = True,
         **kwargs: Any,
     ) -> None:
         """

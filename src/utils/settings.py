@@ -34,8 +34,8 @@ class Settings:
         # Embeddings
         self.embedder_name = os.getenv("EMBEDDER_NAME", "jina")
         self.embedding_model = os.getenv("EMBEDDING_MODEL", "jina-embeddings-v3")
-        self.embedding_api_key = os.getenv(
-            "EMBEDDING_API_KEY", 
+        self.embedding_model_api_key = os.getenv(
+            "EMBEDDING_MODEL_API_KEY", 
             os.getenv("JINA_API_KEY", "")  # Backwards compatibility
         )
         

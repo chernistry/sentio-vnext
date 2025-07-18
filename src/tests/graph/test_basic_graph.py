@@ -6,10 +6,15 @@ These tests verify the functionality of the basic RAG graph pipeline.
 
 import pytest
 from unittest.mock import MagicMock, patch
+import sys
+import os
 
-from core.graph import build_basic_graph
-from core.graph.state import RAGState
-from core.models.document import Document
+# Добавляем путь к src директории
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
+
+from src.core.graph import build_basic_graph
+from src.core.graph.state import RAGState
+from src.core.models.document import Document
 
 
 def test_rag_state_initialization():
@@ -23,8 +28,8 @@ def test_rag_state_initialization():
     assert state.response == ""
 
 
-@patch("core.retrievers.get_retriever")
-@patch("core.rerankers.get_reranker")
+@patch("src.core.retrievers.get_retriever")
+@patch("src.core.rerankers.get_reranker")
 def test_basic_graph_creation(mock_get_reranker, mock_get_retriever):
     """Test basic graph creation."""
     # Setup mock retriever and reranker
@@ -33,15 +38,19 @@ def test_basic_graph_creation(mock_get_reranker, mock_get_retriever):
     mock_get_retriever.return_value = mock_retriever
     mock_get_reranker.return_value = mock_reranker
     
-    # Create graph
-    graph = build_basic_graph()
+    # Create graph with mock mode config to prevent factory functions from being called
+    graph = build_basic_graph(
+        retriever=mock_retriever, 
+        reranker=mock_reranker,
+        config={'mode': 'mock'}
+    )
     
     # Check graph structure (this is a basic smoke test)
     assert graph is not None
 
 
-@patch("core.retrievers.get_retriever")
-@patch("core.rerankers.get_reranker")
+@patch("src.core.retrievers.get_retriever")
+@patch("src.core.rerankers.get_reranker")
 def test_graph_executes_all_nodes(mock_get_reranker, mock_get_retriever):
     """Test that the graph executes all nodes in the pipeline."""
     # Setup mock retriever

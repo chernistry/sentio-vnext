@@ -5,7 +5,7 @@ State definition for RAG pipeline LangGraph.
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 
-from core.models.document import Document
+from src.core.models.document import Document
 
 
 class RAGState(BaseModel):

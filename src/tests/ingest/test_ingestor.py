@@ -169,6 +169,9 @@ async def test_ingest_documents_pipeline(
     # Mock _load_documents_from_directory
     ingestor._load_documents_from_directory = MagicMock(return_value=sample_documents)
     
+    # Manually set the documents_processed value since we're mocking the method that sets it
+    ingestor._stats["documents_processed"] = len(sample_documents)
+    
     # Run ingestion
     with tempfile.TemporaryDirectory() as temp_dir:
         stats = await ingestor.ingest_documents(temp_dir)

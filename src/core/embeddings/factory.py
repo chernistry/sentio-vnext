@@ -61,7 +61,7 @@ def get_embedder(
     Get an instance of the configured embedding model.
     
     Args:
-        provider: Provider key (e.g., 'jina'). If None, uses settings.embedding_provider.
+        provider: Provider key (e.g., 'jina'). If None, uses settings.embedder_name.
         model_name: Model name to use. If None, uses settings.embedding_model.
         **kwargs: Additional configuration passed to the embedding model constructor.
         
@@ -71,7 +71,7 @@ def get_embedder(
     Raises:
         EmbeddingError: If provider is unknown or instantiation fails.
     """
-    provider_key = (provider or settings.embedding_provider).lower()
+    provider_key = (provider or settings.embedder_name).lower()
     model = model_name or settings.embedding_model
     
     # Use cached class if available

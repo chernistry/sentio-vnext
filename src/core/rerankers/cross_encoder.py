@@ -7,7 +7,7 @@ from typing import List
 
 from sentence_transformers import CrossEncoder  # type: ignore
 
-from core.models.document import Document
+from src.core.models.document import Document
 
 logger = logging.getLogger(__name__)
 
