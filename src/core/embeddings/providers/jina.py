@@ -21,10 +21,10 @@ logger = logging.getLogger(__name__)
 
 # Known dimensions for Jina models
 KNOWN_MODEL_DIMENSIONS = {
-    "jina-embeddings-v2-base-en": 768,
-    "jina-embeddings-v2-small-en": 512,
-    "jina-embeddings-v2-base-code": 768,
-    "jina-embeddings-v2-small-code": 512,
+    "jina-embeddings-v3": 768,
+    "jina-embeddings-v3": 512,
+    "jina-embeddings-v3": 768,
+    "jina-embeddings-v3": 512,
     "jina-embeddings-v3": 1024,
 }
 

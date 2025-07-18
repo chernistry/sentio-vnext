@@ -155,6 +155,7 @@ class JinaReranker(Reranker):
                 # Create a copy of the document to avoid modifying the original
                 doc = docs[index]
                 doc.metadata["rerank_score"] = float(score)
+                doc.metadata["score"] = float(score)
                 scored_docs.append(doc)
 
             # Sort by rerank score

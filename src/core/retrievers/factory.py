@@ -26,155 +26,179 @@ def create_retriever_from_env(
     corpus_docs: Optional[List[Document]] = None,
     scorer_plugins: Optional[List[ScorerPlugin]] = None,
 ) -> BaseRetriever:
-    """Create a retriever based on environment configuration.
-    
-    Args:
-        client: Qdrant client or store
-        embedder: Embedding model
-        collection_name: Collection name (defaults to COLLECTION_NAME env var)
-        corpus_docs: Optional corpus documents for BM25/hybrid retrieval
-        scorer_plugins: Optional scorer plugins for hybrid retrieval
-        
-    Returns:
-        Configured retriever instance
-        
-    Raises:
-        ValueError: If retrieval strategy is unknown
-    """
-    # Get configuration from environment
-    strategy = os.getenv("RETRIEVAL_STRATEGY", "hybrid").lower()
+    """Create a retriever based on environment configuration."""
+    # Default to the configuration that yielded the best average reranked score
+    # during the latest quality experiments (see `retriever_quality_results.json`).
+    #  * dense strategy
+    #  * RRF_K=20 (only used by hybrid retriever but kept consistent)
+    #  * RETRIEVAL_TOP_K=10
+    # Environment variables can still override these values at runtime.
+    strategy = os.getenv("RETRIEVAL_STRATEGY", "dense").lower()
     retrieval_top_k = int(os.getenv("RETRIEVAL_TOP_K", "10"))
-    rrf_k = int(os.getenv("RRF_K", "60"))
+    rrf_k = int(os.getenv("RRF_K", "20"))
     bm25_variant = os.getenv("BM25_VARIANT", "okapi").lower()
-    
-    # Resolve collection name
+
     if collection_name is None:
         collection_name = os.getenv("COLLECTION_NAME", "Sentio_docs")
-    
-    logger.info("Creating retriever with strategy: %s", strategy)
-    
-    # Get vector name from environment with backward compatibility
+    logger.info(f"Creating retriever with strategy: {strategy}, collection: {collection_name}")
+
     vector_name = os.getenv("TEXT_VECTOR_NAME", "text-dense")
-    logger.debug("Using vector name: %s", vector_name)
-    
-    # Create dense retriever (used directly or as part of hybrid)
-    # Check if DenseRetriever accepts vector_name parameter
-    import inspect
-    from src.core.retrievers.dense import DenseRetriever
-    
-    dense_retriever_sig = inspect.signature(DenseRetriever.__init__)
-    
-    # Create dense retriever with appropriate parameters
-    if "vector_name" in dense_retriever_sig.parameters:
-        # DenseRetriever supports vector_name parameter
-        dense_retriever = DenseRetriever(
-            client=client,
-            embedder=embedder,
-            collection_name=collection_name,
-            vector_name=vector_name,
+    logger.debug(f"Using vector name: {vector_name}")
+
+    # Dense retriever is the base for most strategies
+    dense_retriever = DenseRetriever(
+        client=client,
+        embedder=embedder,
+        collection_name=collection_name,
+        vector_name=vector_name,
+    )
+
+    # ------------------------------------------------------------------
+    # Default scoring plugins – enabled unless overridden by caller
+    # ------------------------------------------------------------------
+    if scorer_plugins is None:
+        from src.core.retrievers.scorers import (
+            SemanticSimilarityScorer,
+            KeywordMatchScorer,
+            MMRScorer,
         )
-        logger.info("Created dense retriever with vector_name parameter")
-    else:
-        # DenseRetriever doesn't support vector_name parameter
-        dense_retriever = DenseRetriever(
-            client=client,
-            embedder=embedder,
-            collection_name=collection_name,
-        )
-        logger.info("Created dense retriever without vector_name parameter")
-    
+
+        scorer_plugins = [
+            # High-weight semantic similarity provides a second-pass view that
+            # leverages larger embedding context than the raw dense score.
+            SemanticSimilarityScorer(embedder=embedder, weight=0.8),
+            # Lightweight lexical matching helps catch corner cases where the
+            # embedder misses exact terminology.
+            KeywordMatchScorer(weight=0.2),
+            # MMR diversification penalises near-duplicates to improve recall.
+            MMRScorer(embedder=embedder, lambda_=0.5, weight=0.5),
+        ]
+
+    # Load corpus from Qdrant if not provided, required for sparse/hybrid
+    if corpus_docs is None and strategy in ("hybrid", "bm25"):
+        logger.info("Loading corpus from Qdrant for sparse index...")
+        try:
+            # Use the client directly to scroll through all documents
+            corpus_docs = []
+            next_offset = None
+            
+            # Get the actual QdrantClient instance
+            qdrant_client = client._client if isinstance(client, QdrantStore) else client
+            
+            # Scroll through all documents in the collection
+            while True:
+                points, next_offset = qdrant_client.scroll(
+                    collection_name=collection_name,
+                    with_payload=True,
+                    with_vectors=False,
+                    limit=100,  # Process in batches
+                    offset=next_offset,
+                )
+                
+                if not points:
+                    break
+                    
+                # Convert points to Document objects
+                for point in points:
+                    if point.payload:
+                        # Try common payload keys for text content
+                        text = (
+                            point.payload.get("text") or
+                            point.payload.get("content") or
+                            point.payload.get("document") or
+                            point.payload.get("page_content") or
+                            ""
+                        )
+                        
+                        # Create Document object
+                        doc = Document(
+                            id=str(point.id),
+                            text=text,
+                            metadata=point.payload.get("metadata", {})
+                        )
+                        corpus_docs.append(doc)
+                
+                # Exit loop if no more points
+                if next_offset is None:
+                    break
+                    
+            logger.info(f"Loaded {len(corpus_docs)} documents from '{collection_name}'")
+        except Exception as e:
+            logger.error(f"Failed to load documents from Qdrant: {e}")
+            corpus_docs = []
+
     if strategy == "dense":
         logger.info("Using dense retrieval strategy")
         return dense_retriever
-    
-    elif strategy == "bm25":
-        logger.info("Using BM25 retrieval strategy with variant: %s", bm25_variant)
+
+    if strategy == "bm25":
+        logger.info(f"Using BM25 retrieval strategy with variant: {bm25_variant}")
         if not corpus_docs:
-            logger.warning("No corpus documents provided for BM25 retrieval, using empty corpus")
-            corpus_docs = []
-            
+            logger.warning("No corpus documents provided for BM25 retrieval.")
+            return BM25Retriever(documents=[], variant=bm25_variant)
         return BM25Retriever(
             documents=corpus_docs,
             variant=bm25_variant,
             cache_dir=os.getenv("SPARSE_CACHE_DIR", ".sparse_cache"),
         )
-    
-    elif strategy == "pyserini":
+
+    if strategy == "pyserini":
         logger.info("Using Pyserini BM25 retrieval strategy")
         try:
             return PyseriniBM25Retriever(
                 index_dir=os.getenv("BM25_INDEX_DIR", "indexes/lucene-index"),
-                k1=0.9,
-                b=0.4,
+                k1=float(os.getenv("BM25_K1", "0.9")),
+                b=float(os.getenv("BM25_B", "0.4")),
             )
         except RuntimeError as e:
-            logger.error("Failed to initialize PyseriniBM25Retriever: %s", e)
-            logger.warning("Falling back to in-memory BM25")
-            
+            logger.error(f"Failed to initialize Pyserini, falling back to BM25: {e}")
             if not corpus_docs:
-                logger.warning("No corpus documents provided for BM25 fallback, using empty corpus")
-                corpus_docs = []
-                
-            return BM25Retriever(
-                documents=corpus_docs,
-                variant=bm25_variant,
-                cache_dir=os.getenv("SPARSE_CACHE_DIR", ".sparse_cache"),
-            )
-    
-    elif strategy == "hybrid":
+                logger.warning("No corpus documents for BM25 fallback.")
+                return BM25Retriever(documents=[], variant=bm25_variant)
+            return BM25Retriever(documents=corpus_docs, variant=bm25_variant)
+
+    if strategy == "hybrid":
         logger.info("Using hybrid retrieval strategy")
-        
-        # Try to use Pyserini if available
         sparse_retriever = None
-        use_pyserini = os.path.isdir(os.getenv("BM25_INDEX_DIR", "indexes/lucene-index"))
-        
-        if use_pyserini:
+        # Prefer Pyserini if index exists
+        index_dir = os.getenv("BM25_INDEX_DIR", "indexes/lucene-index")
+        if os.path.isdir(index_dir):
             try:
-                sparse_retriever = PyseriniBM25Retriever(
-                    index_dir=os.getenv("BM25_INDEX_DIR", "indexes/lucene-index"),
-                )
-                logger.info("Using Pyserini for sparse retrieval in hybrid strategy")
+                sparse_retriever = PyseriniBM25Retriever(index_dir=index_dir)
+                logger.info(f"Using Pyserini for sparse retrieval from {index_dir}")
             except RuntimeError as e:
-                logger.error("Failed to initialize PyseriniBM25Retriever: %s", e)
-                sparse_retriever = None
+                logger.error(f"Failed to initialize Pyserini: {e}")
         
+        # Fallback to in-memory BM25 if Pyserini is not used
+        if sparse_retriever is None:
+            if corpus_docs:
+                sparse_retriever = BM25Retriever(documents=corpus_docs, variant=bm25_variant)
+                logger.info(f"Using in-memory BM25 for sparse retrieval ({len(corpus_docs)} docs)")
+            else:
+                logger.warning("Hybrid search selected, but no sparse retriever available.")
+
         return HybridRetriever(
             dense_retriever=dense_retriever,
-            corpus_docs=corpus_docs,
+            corpus_docs=corpus_docs,  # Pass docs for consistency
             rrf_k=rrf_k,
             scorer_plugins=scorer_plugins,
             sparse_retriever=sparse_retriever,
         )
-    
-    else:
-        raise ValueError(f"Unknown retrieval strategy: {strategy}")
+
+    raise ValueError(f"Unknown retrieval strategy: {strategy}")
 
 
 def create_retriever_for_graph() -> BaseRetriever:
-    """Create a retriever for the LangGraph pipeline.
-    
-    This is a convenience function that creates all necessary components
-    and returns a configured retriever based on environment variables.
-    
-    Returns:
-        Configured retriever instance
-    """
+    """Create a retriever for the LangGraph pipeline."""
     from src.core.embeddings import get_embedder
     from src.utils.settings import settings
-    
-    # Create embedder
+
     embedder = get_embedder(
         model_name=os.getenv("EMBEDDING_MODEL", "jina-embeddings-v3"),
         api_key=os.getenv("EMBEDDING_MODEL_API_KEY", ""),
     )
+    client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
     
-    # Create Qdrant client
-    client = QdrantClient(
-        url=settings.qdrant_url,
-        api_key=settings.qdrant_api_key,
-    )
-    
-    # Create retriever
     return create_retriever_from_env(
         client=client,
         embedder=embedder,

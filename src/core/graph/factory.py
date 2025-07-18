@@ -80,7 +80,7 @@ class GraphConfig:
         
         # Set other parameters from environment if not provided
         self.llm = llm
-        self.retrieval_top_k = retrieval_top_k or int(os.getenv("RETRIEVAL_TOP_K", "10"))
+        self.retrieval_top_k = retrieval_top_k or int(os.getenv("RETRIEVAL_TOP_K", "20"))
         self.reranking_top_k = reranking_top_k or int(os.getenv("RERANKING_TOP_K", "5"))
         self.selection_top_k = selection_top_k or int(os.getenv("SELECTION_TOP_K", "3"))
         self.max_tokens = max_tokens or 2000

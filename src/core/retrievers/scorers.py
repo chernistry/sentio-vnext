@@ -13,6 +13,13 @@ from typing import Dict, List, Optional, Set, Pattern
 from src.core.models.document import Document
 from src.core.retrievers.base import ScorerPlugin
 
+__all__ = [
+    "KeywordMatchScorer",
+    "RecencyScorer",
+    "SemanticSimilarityScorer",
+    "MMRScorer",
+]
+
 logger = logging.getLogger(__name__)
 
 
@@ -164,7 +171,7 @@ class SemanticSimilarityScorer(ScorerPlugin):
             if not doc_texts:
                 return []
                 
-            doc_embeddings = self.embedder.embed_batch_sync(doc_texts)
+            doc_embeddings = self.embedder.embed_many_sync(doc_texts)
             
             # Calculate cosine similarities
             query_norm = np.linalg.norm(query_embedding)
@@ -182,4 +189,86 @@ class SemanticSimilarityScorer(ScorerPlugin):
             
         except Exception as e:
             logger.warning("Error in semantic scoring: %s", e)
+            return [0.0] * len(docs) 
+
+
+class MMRScorer(ScorerPlugin):
+    """Diversify results using Maximal Marginal Relevance (MMR).
+
+    This scorer rewards documents that are both relevant to the query *and*
+    novel with respect to the already-ranked documents.  It computes a
+    combined score for each document:
+
+        ``score = λ · relevance − (1 − λ) · redundancy``
+
+    where *relevance* is the cosine similarity between the document and the
+    query, and *redundancy* is the **maximum** cosine similarity between the
+    document and any higher-ranked document.  The scorer returns a list of
+    MMR scores that can be fused with existing signals.
+
+    Args:
+        embedder: Embedding backend with ``embed_sync``/``embed_batch_sync``.
+        lambda_: Trade-off between relevance and diversity.  Should be in the
+                 range ⟦0,1⟧.  A higher value favours relevance.
+        weight:   Final weight applied when adding to the fusion score.
+    """
+
+    def __init__(self, embedder, lambda_: float = 0.7, weight: float = 0.5):
+        if not 0.0 <= lambda_ <= 1.0:
+            raise ValueError("lambda_ must be between 0 and 1 inclusive")
+        self.embedder = embedder
+        self.lambda_ = lambda_
+        self.weight = weight
+
+    def score(self, query: str, docs: List[Document]) -> List[float]:
+        import numpy as np
+
+        if not docs:
+            return []
+
+        try:
+            # Embed query and documents
+            query_emb = self.embedder.embed_sync(query)
+            doc_embs = self.embedder.embed_many_sync([d.text for d in docs])
+
+            # Pre-compute cosine similarities to the query
+            def _cos(a: np.ndarray, b: np.ndarray) -> float:
+                denom = (np.linalg.norm(a) * np.linalg.norm(b))
+                return float(np.dot(a, b) / denom) if denom else 0.0
+
+            rel_scores = [_cos(query_emb, d_emb) for d_emb in doc_embs]
+
+            mmr_scores: List[float] = [0.0] * len(docs)
+            selected: List[int] = []
+
+            # Greedy MMR selection to estimate redundancy for each doc
+            for _ in range(len(docs)):
+                best_idx = None
+                best_score = -1.0
+                for idx, rel in enumerate(rel_scores):
+                    if idx in selected:
+                        continue
+                    # Redundancy: max similarity to any already selected doc
+                    redundancy = 0.0
+                    for s_idx in selected:
+                        redundancy = max(redundancy, _cos(doc_embs[idx], doc_embs[s_idx]))
+                    score = self.lambda_ * rel - (1 - self.lambda_) * redundancy
+                    if score > best_score:
+                        best_score = score
+                        best_idx = idx
+                if best_idx is None:
+                    break
+                selected.append(best_idx)
+                mmr_scores[best_idx] = best_score * self.weight
+
+            # For documents never selected, fall back to scaled relevance only
+            for idx in range(len(docs)):
+                if mmr_scores[idx] == 0.0:
+                    mmr_scores[idx] = rel_scores[idx] * self.weight * self.lambda_
+
+            # Ensure scores are non-negative after weighting
+            mmr_scores = [max(0.0, s) for s in mmr_scores]
+            return mmr_scores
+        except Exception as exc:  # pragma: no cover – defensive
+            logger.warning("MMR scorer failed: %s", exc)
             return [0.0] * len(docs) 

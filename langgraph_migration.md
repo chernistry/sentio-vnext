@@ -91,28 +91,23 @@ docs/                   # MkDocs
 
 ---
 
-## 6 · Retrieval
+## 6 · Retrieval ✅
 
-- [ ] Dense search via Qdrant.
-- [ ] Hybrid search (`SparseBM25 + Dense`) with RRF fusion.
-- [ ] Pluggable scorers.
+- Dense search via Qdrant (`core.retrievers.dense.DenseRetriever`).
+- Hybrid search (`core.retrievers.hybrid.HybridRetriever`) combining BM25 & dense with RRF fusion.
+- **Extended**: Pluggable scorers – semantic similarity, keyword matching, and MMR-based diversification.
 
----
+## 7 · Reranker ✅
 
-## 7 · Reranker
+- Interface `Reranker.rerank(query, docs, top_k)` in `core.rerankers.base`.
+- Jina-API cross-encoder adapter (`core.rerankers.jina_reranker.JinaReranker`).
+- **Extended**: Uniform metadata key `metadata["score"]` for downstream metrics.
 
-- [ ] Interface `Reranker.rerank(query, docs, top_k)`.
-- [ ] Default: mini-cross-encoder (sentence-transformers) loaded lazily.
+## 8 · LangGraph pipeline (in progress)
 
----
-
-## 8 · LangGraph pipeline
-
-- [ ] Define `RAGState` (pydantic v2 BaseModel).
-- [ ] Implement nodes: normaliser → retriever → reranker → generator →
-      post-processor.
-- [ ] `graph_factory.build_basic_graph(cfg)` returns compiled graph.
-- [ ] Provide streaming wrapper (`astream`).
+- ✅ Basic graph factory (`core.graph.factory`) with nodes: **retriever → reranker → selector**.
+- ✅ `RAGState` draft defined.
+- ⏳ LLM generator node & streaming wrapper – **todo**.
 
 ---
 

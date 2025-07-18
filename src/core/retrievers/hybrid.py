@@ -240,8 +240,9 @@ class HybridRetriever(BaseRetriever):  # noqa: WPS110
         for doc_id, score in ranked_items:
             if doc_id in id_to_doc:
                 doc = id_to_doc[doc_id]
-                # Store the final fused score
+                # Store fused score under generic key expected by evaluators
                 doc.metadata["hybrid_score"] = float(score)
+                doc.metadata["score"] = float(score)
                 results.append(doc)
         
         return results
