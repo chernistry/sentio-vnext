@@ -64,7 +64,8 @@ def test_graph_executes_all_nodes(mock_get_reranker, mock_get_retriever):
     
     # Execute graph
     state = RAGState(query="test query")
-    result = graph.invoke(state)
+    config = {"configurable": {"thread_id": "test_thread"}}
+    result = graph.invoke(state, config)
     
     # Verify retriever was called
     mock_retriever.retrieve.assert_called_once()

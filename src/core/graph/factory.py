@@ -9,7 +9,7 @@ import logging
 from typing import Any, Dict, Optional, cast
 
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from core.retrievers.base import BaseRetriever
 from core.retrievers import get_retriever
@@ -102,7 +102,7 @@ def build_basic_graph(
     builder.add_edge("generate", END)
     
     # Compile the graph
-    memory = MemorySaver()
+    memory = SqliteSaver.from_conn_string(":memory:")
     graph = builder.compile(checkpointer=memory)
     
     logger.info("Built basic RAG graph with %d nodes", len(builder.nodes))
