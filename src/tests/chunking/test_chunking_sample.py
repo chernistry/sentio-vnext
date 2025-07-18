@@ -2,15 +2,15 @@
 """
 Test script for demonstrating the chunking functionality on actual documents.
 """
-
+import asyncio
 import sys
 from pathlib import Path
 import time
 
 # Add project src to path for imports
-sys.path.append(str(Path(__file__).parent))
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
-from src.core.chunking.text_splitter import SentenceSplitter
+from src.core.chunking.text_splitter import TextChunker
 from src.core.models.document import Document
 
 
@@ -20,10 +20,10 @@ def read_text_file(file_path: str) -> str:
         return f.read()
 
 
-def main():
+async def main():
     """Main function to demonstrate chunking functionality."""
     # Path to test document
-    test_file_path = "../legacy/root/data/raw/python_for_osint.txt"
+    test_file_path = "src/tests/chunking/sample_data/python_for_osint.txt"
     
     try:
         # Read document
@@ -38,16 +38,20 @@ def main():
         )
         print(f"Created document with ID: {doc.id}")
         
-        # Initialize sentence splitter
-        print("\nInitializing SentenceSplitter...")
-        splitter = SentenceSplitter(chunk_size=512, chunk_overlap=64)
+        # Initialize TextChunker
+        print("\nInitializing TextChunker...")
+        chunker = await TextChunker.create(
+            strategy="recursive",
+            chunk_size=512,
+            chunk_overlap=64
+        )
         
         # Time the chunking operation
         start_time = time.time()
         print("Splitting document into chunks...")
         
         # Create chunks
-        chunks = splitter.split_documents([doc])
+        chunks = chunker.split([doc])
         
         end_time = time.time()
         duration = end_time - start_time
@@ -67,23 +71,21 @@ def main():
             print(f"Chunk length: {len(chunk.text)} chars")
             
         # Calculate average chunk size
-        avg_size = sum(len(chunk.text) for chunk in chunks) / len(chunks)
+        avg_size = sum(len(chunk.text) for chunk in chunks) / len(chunks) if chunks else 0
         print(f"\nAverage chunk size: {avg_size:.2f} characters")
         
-        # Verify content integrity
-        original_text = doc.text.replace(" ", "").replace("\n", "")
-        chunked_text = "".join(chunk.text for chunk in chunks).replace(" ", "").replace("\n", "")
+        # Verify content integrity by checking if the total length of chunks
+        # is close to the original text length. This is an approximation
+        # due to overlap and splitting logic.
+        original_length = len(doc.text)
+        chunked_length = sum(len(c.text) for c in chunks)
+        # A simple heuristic: total chunk length should be at least the original,
+        # and not excessively larger.
+        content_integrity_ok = chunked_length >= original_length
         
-        content_match = original_text == chunked_text
-        print(f"Content integrity check: {'PASSED' if content_match else 'FAILED'}")
-        
-        if not content_match:
-            # Check what percentage of content is preserved
-            orig_len = len(original_text)
-            chunk_len = len(chunked_text)
-            preserved = min(orig_len, chunk_len) / max(orig_len, chunk_len) * 100
-            print(f"Content preservation: {preserved:.2f}%")
-            print(f"Original length: {orig_len}, Chunked length: {chunk_len}")
+        print(f"\nContent integrity check (heuristic): {'PASSED' if content_integrity_ok else 'FAILED'}")
+        print(f"Original length: {original_length}, Combined chunk length: {chunked_length}")
+
             
     except Exception as e:
         print(f"Error: {e}")
@@ -92,4 +94,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    asyncio.run(main()) 

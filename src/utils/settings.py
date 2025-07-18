@@ -78,14 +78,16 @@ class SentioSettings(BaseSettings):
     chunk_overlap: int = Field(64, env="CHUNK_OVERLAP")
     min_chunk_size: int = Field(50, env="MIN_CHUNK_SIZE")
     max_chunk_size: int = Field(1024, env="MAX_CHUNK_SIZE")
-    preserve_code_blocks: bool = Field(True, env="PRESERVE_CODE_BLOCKS")
-    preserve_tables: bool = Field(True, env="PRESERVE_TABLES")
     chunking_strategy: str = Field("sentence", env="CHUNKING_STRATEGY")
+
+    # Vector store ---------------------------------------------------------
+    qdrant_url: str = Field("http://localhost:6333", env="QDRANT_URL")
+    qdrant_api_key: str | None = Field(None, env="QDRANT_API_KEY")
 
     # --------------------------------------------------------------------
     # Utility helpers
     # --------------------------------------------------------------------
-    def chunking_kwargs(self) -> dict[str, int | bool | str]:
+    def chunking_kwargs(self) -> dict[str, int | str]:
         """Return dict with chunking-related configuration suitable for TextChunker.create()."""
         return {
             "chunk_size": self.chunk_size,
@@ -93,8 +95,6 @@ class SentioSettings(BaseSettings):
             "strategy": self.chunking_strategy.lower(),
             "min_chunk_size": self.min_chunk_size,
             "max_chunk_size": self.max_chunk_size,
-            "preserve_code_blocks": self.preserve_code_blocks,
-            "preserve_tables": self.preserve_tables,
         }
 
     # Dynamic fallback -----------------------------------------------------
