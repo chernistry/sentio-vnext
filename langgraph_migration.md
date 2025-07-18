@@ -60,18 +60,18 @@ docs/                   # MkDocs
 
 ## 3 · Ingestion CLI
 
-- [ ] Typer command `sentio ingest <path>`.
-- [ ] Reads files, splits via splitter, stores raw chunks on disk (`data/`).
-- [ ] Emits `chunks.parquet` for deterministic tests.
+- [x] Typer command `sentio ingest <path>`.
+- [x] Reads files, splits via TextChunker, stores raw chunks on disk (`data/`, temporary by default).
+- [x] Emits `chunks.parquet` for deterministic tests.
 
 ---
 
 ## 4 · Embedding service
 
-- [ ] `core.embeddings.base.BaseEmbedder` (async + sync wrappers).
-- [ ] Jina + OpenAI adapters behind factory.
-- [ ] Memory cache with TTL (LFU).
-- [ ] Warm-up on app start.
+- [x] `core.embeddings.base.BaseEmbedder` (async + sync wrappers).
+- [x] Jina + OpenAI adapters behind factory.
+- [x] Memory cache with TTL (LFU).
+- [x] Warm-up on app start.
 
 ---
 
