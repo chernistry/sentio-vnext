@@ -1,5 +1,7 @@
 # Sentio vNext
 
+**Note**: This foundational boilerplate accelerates RAG system development from scratch.
+
 LangGraph-based implementation of the Sentio RAG system.
 
 
@@ -19,7 +21,7 @@ LangGraph-based implementation of the Sentio RAG system.
 
 ## Overview
 
-Sentio vNext is a boilerplate of an Retrieval-Augmented Generation (RAG) system built with a LangGraph-inspired architecture. It provides high-performance vector retrieval, intelligent reranking, and streaming responses with an OpenAI-compatible API.
+Sentio vNext is a foundational boilerplate for a Retrieval-Augmented Generation (RAG) system built with a LangGraph-inspired architecture. It provides high-performance vector retrieval, intelligent reranking, and streaming responses with an OpenAI-compatible API.
 
 This system is designed for enterprise deployment with comprehensive monitoring, logging, and security considerations.
 
