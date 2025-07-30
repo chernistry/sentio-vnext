@@ -58,7 +58,7 @@ def run_rag_graph(query: str, config: Optional[Dict[str, Any]] = None) -> RAGSta
     """
     config = config or {}
     
-    # Установка режима mock для локального запуска
+    # Set mock mode for local execution
     if 'mode' not in config:
         config['mode'] = 'mock'
     
@@ -73,7 +73,7 @@ def run_rag_graph(query: str, config: Optional[Dict[str, Any]] = None) -> RAGSta
     logger.info("Running graph with query: %s", query)
     raw_result = graph.invoke(state)
     
-    # Преобразуем результат в RAGState, если это словарь
+    # Convert result to RAGState if it's a dictionary
     if isinstance(raw_result, dict):
         result = RAGState(query=query)
         for key, value in raw_result.items():

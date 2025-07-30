@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import sys
 import os
 
-# Добавляем путь к src директории
+# Add path to src directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 from src.core.graph import build_basic_graph

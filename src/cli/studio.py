@@ -43,7 +43,7 @@ def start_studio(
     and debugging the RAG pipeline graph.
     """
     try:
-        # Проверяем, установлен ли langgraph-cli
+        # Check if langgraph-cli is installed
         try:
             subprocess.run(["langgraph", "--version"], check=True, capture_output=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
@@ -53,14 +53,14 @@ def start_studio(
                 "langgraph-cli[inmem]>=0.0.15"
             ], check=True)
         
-        # Запускаем LangGraph Studio
+        # Start LangGraph Studio
         typer.echo(f"Starting LangGraph Studio on port {port}...")
         
-        # Используем subprocess для запуска команды langgraph dev
+        # Use subprocess to run the langgraph dev command
         cmd = ["langgraph", "dev", "--port", str(port), "--allow-blocking"]
         typer.echo(f"Running: {' '.join(cmd)}")
         
-        # Запускаем процесс
+        # Launch the process
         process = subprocess.run(cmd)
         
         if process.returncode != 0:
@@ -81,9 +81,6 @@ def install_studio_dependencies():
     
     This command installs the necessary dependencies for running LangGraph Studio.
     """
-    import subprocess
-    import sys
-    
     try:
         typer.echo("Installing LangGraph Studio dependencies...")
         subprocess.run([
@@ -97,4 +94,4 @@ def install_studio_dependencies():
 
 
 if __name__ == "__main__":
-    studio_app() 
+    studio_app()

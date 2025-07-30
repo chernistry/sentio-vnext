@@ -85,7 +85,7 @@ def mock_embedder():
     """Fixture providing a mock Embedder."""
     embedder = MagicMock()
     embedder.dimension = 3
-    # Используем AsyncMock для асинхронных методов
+    # Use AsyncMock for asynchronous methods
     embedder.embed_async_many = AsyncMock(return_value=[
         [0.1, 0.2, 0.3],
         [0.4, 0.5, 0.6],

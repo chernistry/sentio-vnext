@@ -1,6 +1,6 @@
 #!/bin/bash
-# Символическая ссылка для запуска CLI команд Sentio
-# Использование: ./sentio <команда> [аргументы]
+# Symbolic link to run Sentio CLI commands
+# Usage: ./sentio <command> [arguments]
 
-# Запускаем run.sh с переданными аргументами
-./run.sh "$@" 
+# Run run.sh with passed arguments
+./run.sh "$@"
