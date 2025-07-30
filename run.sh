@@ -1,8 +1,8 @@
 #!/bin/bash
-# Скрипт-обертка для запуска CLI команд Sentio без установки проекта
+# Wrapper script to run Sentio CLI commands without installing the project
 
-# Добавляем текущую директорию в PYTHONPATH
+# Add current directory to PYTHONPATH
 export PYTHONPATH="$(pwd):${PYTHONPATH}"
 
-# Запускаем CLI с переданными аргументами
+# Run CLI with passed arguments
 python -m src.cli.main "$@"
